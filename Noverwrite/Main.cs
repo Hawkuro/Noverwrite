@@ -29,6 +29,9 @@ namespace Noverwrite
 
             config = new JavaScriptSerializer().Deserialize<ConfigObject>(new StreamReader(Constants.MOD_FOLDER+"\\config.json").ReadToEnd());
             //Log.Info(config.SaveFolder);
+
+            var saveFolder = new DirectoryInfo(Environment.ExpandEnvironmentVariables(config.SaveFolder));
+            Log.Info(string.Join("\n", saveFolder.GetDirectories().Select(d=>d.Name)));
         }
     }
 }
