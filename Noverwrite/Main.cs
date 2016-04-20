@@ -30,7 +30,7 @@ namespace Noverwrite
 
         public static long IdFromString(string saveName)
         {
-            return long.Parse(saveName.Split('_')[1]);
+            return long.Parse(saveName.Split('_').Last());
         }
 
         public class SdVSave
@@ -59,7 +59,10 @@ namespace Noverwrite
             //Log.Info(config.SaveFolder);
 
             SaveFolder = new DirectoryInfo(Environment.ExpandEnvironmentVariables(config.SaveFolder));
-            LogInfo("Found the following save files: "+string.Join(", ", SaveFolder.GetDirectories().Select(d=>d.Name)));
+            var saveDirs = SaveFolder.GetDirectories().Select(d=>d.Name).ToList();
+            LogInfo("Found the following save files: "+string.Join(", ", saveDirs));
+            SdVSave.ExistingIds = saveDirs.Select(IdFromString).ToList();
+            LogInfo("Found the following save file Ids: "+string.Join(", ", SdVSave.ExistingIds));
 
             PlayerEvents.LoadedGame += GameLoaded;
         }
