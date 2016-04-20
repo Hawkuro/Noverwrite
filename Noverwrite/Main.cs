@@ -45,11 +45,18 @@ namespace Noverwrite
                 SaveDir = new DirectoryInfo(StardewModdingAPI.Constants.CurrentSavePath);
                 UniqueId = IdFromString(SaveName);
             }
+
+            public void StoreOldSave()
+            {
+                var newUniqueId = ExistingIds.Max() + 1;
+                LogInfo("New save's Id: "+newUniqueId);
+            }
         }
 
         public ConfigObject config;
         public DirectoryInfo SaveFolder;
         public SdVSave currentSave;
+        public bool justLoaded;
 
         public override void Entry(params object[] objects)
         {
@@ -65,12 +72,29 @@ namespace Noverwrite
             LogInfo("Found the following save file Ids: "+string.Join(", ", SdVSave.ExistingIds));
 
             PlayerEvents.LoadedGame += GameLoaded;
+            TimeEvents.TimeOfDayChanged += StoreOldSave;
+        }
+
+        private void StoreOldSave(object sender, EventArgsIntChanged eventArgs)
+        {
+            if (StardewValley.Game1.timeOfDay != 610 || currentSave == null)
+            {
+                //LogInfo(StardewValley.Game1.timeOfDay.ToString());
+                return;
+            }
+            if (justLoaded)
+            {
+                justLoaded = false;
+                return;
+            }
+            currentSave.StoreOldSave();
         }
 
         private void GameLoaded(object sender, EventArgsLoadedGameChanged eventArgs)
         {
             currentSave = new SdVSave();
             LogInfo("Save "+ currentSave.SaveName + " loaded");
+            justLoaded = true;
         }
     }
 }
