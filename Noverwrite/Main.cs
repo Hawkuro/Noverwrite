@@ -23,6 +23,8 @@ namespace Noverwrite
     public class Main : Mod
     {
         private ConfigObject config;
+        public DirectoryInfo SaveFolder;
+
         public override void Entry(params object[] objects)
         {
             Log.Info(Constants.MOD_NAME + " => Initializing");
@@ -30,8 +32,8 @@ namespace Noverwrite
             config = new JavaScriptSerializer().Deserialize<ConfigObject>(new StreamReader(Constants.MOD_FOLDER+"\\config.json").ReadToEnd());
             //Log.Info(config.SaveFolder);
 
-            var saveFolder = new DirectoryInfo(Environment.ExpandEnvironmentVariables(config.SaveFolder));
-            Log.Info(string.Join("\n", saveFolder.GetDirectories().Select(d=>d.Name)));
+            SaveFolder = new DirectoryInfo(Environment.ExpandEnvironmentVariables(config.SaveFolder));
+            Log.Info(string.Join("\n", SaveFolder.GetDirectories().Select(d=>d.Name)));
         }
     }
 }
