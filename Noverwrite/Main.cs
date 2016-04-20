@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using StardewModdingAPI;
+using StardewModdingAPI.Events;
 
 namespace Noverwrite
 {
@@ -22,18 +23,51 @@ namespace Noverwrite
     }
     public class Main : Mod
     {
-        private ConfigObject config;
+        public static void LogInfo(string info)
+        {
+            Log.Info(Constants.MOD_NAME + " => " + info);
+        }
+
+        public static long IdFromString(string saveName)
+        {
+            return long.Parse(saveName.Split('_')[1]);
+        }
+
+        public class SdVSave
+        {
+            public DirectoryInfo SaveDir;
+            public long UniqueId;
+            public static List<long> ExistingIds;
+            public string SaveName { get { return SaveDir.Name; } }
+
+            public SdVSave()
+            {
+                SaveDir = new DirectoryInfo(StardewModdingAPI.Constants.CurrentSavePath);
+                UniqueId = IdFromString(SaveName);
+            }
+        }
+
+        public ConfigObject config;
         public DirectoryInfo SaveFolder;
+        public SdVSave currentSave;
 
         public override void Entry(params object[] objects)
         {
-            Log.Info(Constants.MOD_NAME + " => Initializing");
+            LogInfo("Initializing");
 
             config = new JavaScriptSerializer().Deserialize<ConfigObject>(new StreamReader(Constants.MOD_FOLDER+"\\config.json").ReadToEnd());
             //Log.Info(config.SaveFolder);
 
             SaveFolder = new DirectoryInfo(Environment.ExpandEnvironmentVariables(config.SaveFolder));
-            Log.Info(string.Join("\n", SaveFolder.GetDirectories().Select(d=>d.Name)));
+            LogInfo("Found the following save files: "+string.Join(", ", SaveFolder.GetDirectories().Select(d=>d.Name)));
+
+            PlayerEvents.LoadedGame += GameLoaded;
+        }
+
+        private void GameLoaded(object sender, EventArgsLoadedGameChanged eventArgs)
+        {
+            currentSave = new SdVSave();
+            LogInfo("Save "+ currentSave.SaveName + " loaded");
         }
     }
 }
