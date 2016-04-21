@@ -4,6 +4,7 @@ using System.Configuration;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using StardewModdingAPI;
@@ -28,6 +29,11 @@ namespace Noverwrite
             Log.Info(Constants.MOD_NAME + " => " + info);
         }
 
+        public static void LogError(string error)
+        {
+            Log.Error(Constants.MOD_NAME + " => " + error);
+        }
+
         public static long IdFromString(string saveName)
         {
             return long.Parse(saveName.Split('_').Last());
@@ -49,12 +55,13 @@ namespace Noverwrite
             public void StoreOldSave()
             {
                 // Initialize
-                var newUniqueId = ExistingIds.Max() + 1;
+                var newUniqueId = ExistingIds.Max() + 1; // There are better ways to do this, but meh
                 LogInfo("New save's Id: "+newUniqueId);
-                var NUILongform = newUniqueId.ToString("D9");
-                var UILongform = UniqueId.ToString("D9");
+                // These are unnecessary it seems, ids can be numbers of any length
+                //var NUILongform = newUniqueId.ToString("D9");
+                //var UILongform = UniqueId.ToString("D9");
                 var splitSaveName = SaveName.Split('_');
-                splitSaveName[splitSaveName.Length-1] = NUILongform;
+                splitSaveName[splitSaveName.Length-1] = newUniqueId.ToString();
                 var newSaveName = string.Join("_", splitSaveName);
                 LogInfo("New save's name: "+newSaveName);
 
@@ -62,15 +69,12 @@ namespace Noverwrite
                 var newSaveDir = Directory.CreateDirectory(SaveFolder.FullName+ "\\" + newSaveName);
                 LogInfo("New save directory created: "+newSaveDir.FullName);
 
-                // Copy save file
-                File.Copy(SaveDir.FullName+"\\"+SaveName+"_old", newSaveDir.FullName+"\\"+newSaveName);
-                LogInfo("Copied previous save file to new one");
-
-                // Edit save file
+                // Copy and edit save file
                 File.WriteAllText(newSaveDir.FullName + "\\" + newSaveName,
-                    File.ReadAllText(newSaveDir.FullName + "\\" + newSaveName)
-                        .Replace("<uniqueIDForThisGame>" + UILongform + "</uniqueIDForThisGame>",
-                            "<uniqueIDForThisGame>" + NUILongform + "</uniqueIDForThisGame>"));
+                    new Regex("<uniqueIDForThisGame>\\d+</uniqueIDForThisGame>")
+                        .Replace(File.ReadAllText(SaveDir.FullName + "\\" + SaveName + "_old"),
+                            "<uniqueIDForThisGame>" + newUniqueId + "</uniqueIDForThisGame>"));
+                LogInfo("Copied previous save file to new one");
 
                 // Copy save game info file
                 File.Copy(SaveDir.FullName+"\\SaveGameInfo_old",newSaveDir.FullName+"\\SaveGameInfo");
