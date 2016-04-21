@@ -48,13 +48,38 @@ namespace Noverwrite
 
             public void StoreOldSave()
             {
+                // Initialize
                 var newUniqueId = ExistingIds.Max() + 1;
                 LogInfo("New save's Id: "+newUniqueId);
+                var NUILongform = newUniqueId.ToString("D9");
+                var UILongform = UniqueId.ToString("D9");
+                var splitSaveName = SaveName.Split('_');
+                splitSaveName[splitSaveName.Length-1] = NUILongform;
+                var newSaveName = string.Join("_", splitSaveName);
+                LogInfo("New save's name: "+newSaveName);
+
+                // Create new save directory
+                var newSaveDir = Directory.CreateDirectory(SaveFolder.FullName+ "\\" + newSaveName);
+                LogInfo("New save directory created: "+newSaveDir.FullName);
+
+                // Copy save file
+                File.Copy(SaveDir.FullName+"\\"+SaveName+"_old", newSaveDir.FullName+"\\"+newSaveName);
+                LogInfo("Copied previous save file to new one");
+
+                // Edit save file
+                File.WriteAllText(newSaveDir.FullName + "\\" + newSaveName,
+                    File.ReadAllText(newSaveDir.FullName + "\\" + newSaveName)
+                        .Replace("<uniqueIDForThisGame>" + UILongform + "</uniqueIDForThisGame>",
+                            "<uniqueIDForThisGame>" + NUILongform + "</uniqueIDForThisGame>"));
+
+                // Copy save game info file
+                File.Copy(SaveDir.FullName+"\\SaveGameInfo_old",newSaveDir.FullName+"\\SaveGameInfo");
+                LogInfo("Copied previous save game info file to new one");
             }
         }
 
-        public ConfigObject config;
-        public DirectoryInfo SaveFolder;
+        public static ConfigObject config;
+        public static DirectoryInfo SaveFolder;
         public SdVSave currentSave;
         public bool justLoaded;
 
@@ -82,11 +107,11 @@ namespace Noverwrite
                 //LogInfo(StardewValley.Game1.timeOfDay.ToString());
                 return;
             }
-            if (justLoaded)
-            {
-                justLoaded = false;
-                return;
-            }
+            //if (justLoaded)
+            //{
+            //    justLoaded = false;
+            //    return;
+            //}
             currentSave.StoreOldSave();
         }
 
