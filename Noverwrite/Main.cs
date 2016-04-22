@@ -14,7 +14,10 @@ namespace Noverwrite
 {
     public class ConfigObject
     {
-        public string SaveFolder { get; set; }
+        public string SaveFolder { get; set; } = "%APPDATA%\\StardewValley\\Saves";
+        public int TimeToStore { get; set; } = 610;
+        public int NoverwriteEveryXDays { get; set; } = 1;
+        public int NoverwriteDayOffset { get; set; } = 0;
     }
 
     public static class Constants
@@ -24,9 +27,15 @@ namespace Noverwrite
     }
     public class Main : Mod
     {
+        // Helpers
         public static void LogInfo(string info)
         {
             Log.Info(Constants.MOD_NAME + " => " + info);
+        }
+
+        public static void LogError(string error, Exception ex)
+        {
+            Log.Error(Constants.MOD_NAME + " => " + error + ": " + ex.Message);
         }
 
         public static void LogError(string error)
@@ -39,90 +48,161 @@ namespace Noverwrite
             return long.Parse(saveName.Split('_').Last());
         }
 
-        public class SdVSave
-        {
-            public DirectoryInfo SaveDir;
-            public long UniqueId;
-            public static List<long> ExistingIds;
-            public string SaveName { get { return SaveDir.Name; } }
+        // Static data
+        public static ConfigObject config;
+        public static HashSet<long> ExistingIds;
+        public static DirectoryInfo SaveFolder;
+        public static bool justLoaded;
 
-            public SdVSave()
+        // Store the previous save, saving it from being discarded later on
+        public static void StoreOldSave()
+        {
+            // Initialize
+            DirectoryInfo SaveDir;
+            try
             {
                 SaveDir = new DirectoryInfo(StardewModdingAPI.Constants.CurrentSavePath);
-                UniqueId = IdFromString(SaveName);
             }
-
-            public void StoreOldSave()
+            catch (Exception e)
             {
-                // Initialize
-                var newUniqueId = ExistingIds.Max() + 1; // There are better ways to do this, but meh
-                LogInfo("New save's Id: "+newUniqueId);
-                // These are unnecessary it seems, ids can be numbers of any length
-                //var NUILongform = newUniqueId.ToString("D9");
-                //var UILongform = UniqueId.ToString("D9");
-                var splitSaveName = SaveName.Split('_');
-                splitSaveName[splitSaveName.Length-1] = newUniqueId.ToString();
-                var newSaveName = string.Join("_", splitSaveName);
-                LogInfo("New save's name: "+newSaveName);
+                LogError("Current save directory not found, aborting", e);
+                return;
+            }
+            // Add the current Id to the set in case it's not there already (i.e. new game)
+            ExistingIds.Add(IdFromString(SaveDir.Name));
 
-                // Create new save directory
-                var newSaveDir = Directory.CreateDirectory(SaveFolder.FullName+ "\\" + newSaveName);
-                LogInfo("New save directory created: "+newSaveDir.FullName);
+            // Create a new, unused unique Id
+            var newUniqueId = ExistingIds.Max() + 1; // There are better ways to do this, but meh
+            LogInfo("New save's Id: " + newUniqueId);
 
-                // Copy and edit save file
+            // Create a new save name using the previous save's character name and new save's Id
+            var splitSaveName = SaveDir.Name.Split('_');
+            splitSaveName[splitSaveName.Length - 1] = newUniqueId.ToString();
+            var newSaveName = string.Join("_", splitSaveName);
+            LogInfo("New save's name: " + newSaveName);
+
+            // Create new save directory
+            DirectoryInfo newSaveDir;
+            try
+            {
+                newSaveDir = Directory.CreateDirectory(SaveFolder.FullName + "\\" + newSaveName);
+            }
+            catch (Exception e)
+            {
+                LogError("Failed to create new save's directory", e);
+                return;
+            }
+            LogInfo("New save directory created: " + newSaveDir.FullName);
+            ExistingIds.Add(newUniqueId);
+
+            // Copy and edit save file with new Id
+            try
+            {
                 File.WriteAllText(newSaveDir.FullName + "\\" + newSaveName,
                     new Regex("<uniqueIDForThisGame>\\d+</uniqueIDForThisGame>")
-                        .Replace(File.ReadAllText(SaveDir.FullName + "\\" + SaveName + "_old"),
+                        .Replace(File.ReadAllText(SaveDir.FullName + "\\" + SaveDir.Name + "_old"),
                             "<uniqueIDForThisGame>" + newUniqueId + "</uniqueIDForThisGame>"));
-                LogInfo("Copied previous save file to new one");
-
-                // Copy save game info file
-                File.Copy(SaveDir.FullName+"\\SaveGameInfo_old",newSaveDir.FullName+"\\SaveGameInfo");
-                LogInfo("Copied previous save game info file to new one");
             }
-        }
+            catch (Exception e)
+            {
+                LogError("Failed to copy and edit save file", e);
+                return;
+            }
+            LogInfo("Copied previous save file to new one");
 
-        public static ConfigObject config;
-        public static DirectoryInfo SaveFolder;
-        public SdVSave currentSave;
-        public bool justLoaded;
+            // Copy save game info file
+            try
+            {
+                File.Copy(SaveDir.FullName + "\\SaveGameInfo_old", newSaveDir.FullName + "\\SaveGameInfo");
+            }
+            catch (Exception e)
+            {
+                LogError("Failed to copy save game info file", e);
+                return;
+            }
+            LogInfo("Copied previous save game info file to new one");
+        }
 
         public override void Entry(params object[] objects)
         {
             LogInfo("Initializing");
 
-            config = new JavaScriptSerializer().Deserialize<ConfigObject>(new StreamReader(Constants.MOD_FOLDER+"\\config.json").ReadToEnd());
-            //Log.Info(config.SaveFolder);
+            // Load config and verify
+            try
+            {
+                config = new JavaScriptSerializer().Deserialize<ConfigObject>(new StreamReader(Constants.MOD_FOLDER + "\\config.json").ReadToEnd());
+            }
+            catch (Exception e)
+            {
+                config = new ConfigObject();
+                LogError("Failed to read Noverwrite config, loaded config with defaults", e);
+            }
 
-            SaveFolder = new DirectoryInfo(Environment.ExpandEnvironmentVariables(config.SaveFolder));
-            var saveDirs = SaveFolder.GetDirectories().Select(d=>d.Name).ToList();
+            if (config.NoverwriteDayOffset >= config.NoverwriteEveryXDays)
+            {
+                LogError("NoverwriteDayOffset may not be bigger or equal to NoverwriteEveryXDays");
+                config.NoverwriteDayOffset = 0;
+            }
+
+            // Find the game's save folder and check existing save Ids
+            List<string> saveDirs;
+            try
+            {
+                SaveFolder = new DirectoryInfo(Environment.ExpandEnvironmentVariables(config.SaveFolder));
+                saveDirs = SaveFolder.GetDirectories().Select(d=>d.Name).ToList();
+            }
+            catch (Exception e)
+            {
+                LogError("Failed to find save folder, assuming no existing saves", e);
+                saveDirs = new List<string>();
+            }
             LogInfo("Found the following save files: "+string.Join(", ", saveDirs));
-            SdVSave.ExistingIds = saveDirs.Select(IdFromString).ToList();
-            LogInfo("Found the following save file Ids: "+string.Join(", ", SdVSave.ExistingIds));
+            ExistingIds = new HashSet<long>(saveDirs.Select(IdFromString).ToList());
+            LogInfo("Found the following save file Ids: "+string.Join(", ", ExistingIds));
 
+            // Add EventListeners
             PlayerEvents.LoadedGame += GameLoaded;
-            TimeEvents.TimeOfDayChanged += StoreOldSave;
+            TimeEvents.TimeOfDayChanged += OnTimeChange;
         }
 
-        private void StoreOldSave(object sender, EventArgsIntChanged eventArgs)
+        public static readonly Dictionary<string, int> SeasonInts = new Dictionary<string, int>
         {
-            if (StardewValley.Game1.timeOfDay != 610 || currentSave == null)
+            {"spring", 0 },
+            {"summer", 1 },
+            {"fall", 2 },
+            {"winter", 3 },
+        };
+        public static int TimeOfDay { get { return StardewValley.Game1.timeOfDay; } }
+        public static int GameDay { get
+        {
+            return 28*4*(StardewValley.Game1.year-1) + 28*SeasonInts[StardewValley.Game1.currentSeason] +
+                   StardewValley.Game1.dayOfMonth;
+        } }
+        private void OnTimeChange(object sender, EventArgsIntChanged eventArgs)
+        {
+            if ( TimeOfDay != config.TimeToStore)
             {
-                //LogInfo(StardewValley.Game1.timeOfDay.ToString());
+                // Do nothing, unless time of day is TimeToStore
                 return;
             }
-            //if (justLoaded)
-            //{
-            //    justLoaded = false;
-            //    return;
-            //}
-            currentSave.StoreOldSave();
+            if (justLoaded)
+            {
+                // Don't back up old save if this is the first day since loading
+                justLoaded = false;
+                return;
+            }
+            if (GameDay%config.NoverwriteEveryXDays != config.NoverwriteDayOffset)
+            {
+                // Only back up every X days
+                return;
+            }
+            // All criteria have been met, store the save
+            StoreOldSave();
         }
 
         private void GameLoaded(object sender, EventArgsLoadedGameChanged eventArgs)
         {
-            currentSave = new SdVSave();
-            LogInfo("Save "+ currentSave.SaveName + " loaded");
+            LogInfo("Game loaded");
             justLoaded = true;
         }
     }

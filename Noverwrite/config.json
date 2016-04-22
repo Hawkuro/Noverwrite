@@ -1,3 +1,6 @@
 ﻿{
-  "SaveFolder":  "%APPDATA%\\StardewValley\\Saves"
+  "SaveFolder": "%APPDATA%\\StardewValley\\Saves",
+  "TimeToStore": 610,
+  "NoverwriteEveryXDays": 1,
+  "NoverwriteDayOffset":  0
 }
