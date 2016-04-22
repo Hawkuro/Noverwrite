@@ -188,6 +188,7 @@ namespace Noverwrite
             if (justLoaded)
             {
                 // Don't back up old save if this is the first day since loading
+                // Caveat: Going to sleep before TimeToStore keeps this as true
                 justLoaded = false;
                 return;
             }
