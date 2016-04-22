@@ -243,3 +243,5 @@ ModelManifest.xml
 
 # FAKE - F# Make
 .fake/
+/Noverwrite-Release-1.0.0
+/Noverwrite-Release-1.0.0.zip
