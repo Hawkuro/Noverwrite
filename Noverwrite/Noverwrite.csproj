@@ -61,6 +61,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <Content Include="license.txt" />
     <Content Include="README.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
